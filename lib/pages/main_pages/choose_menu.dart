@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:priem_poliklinika/main.dart';
+import 'package:priem_poliklinika/pages/main_pages/clinic_choose.dart';
 import 'package:priem_poliklinika/pages/main_pages/doctor_choose.dart';
 import 'package:priem_poliklinika/pages/main_pages/navbar.dart';
 import 'package:priem_poliklinika/pages/main_pages/profile.dart';
@@ -64,7 +65,8 @@ class _MainMenuState extends State<MainMenu> {
                     iconPath: 'assets/hospital.svg',
                     label: 'Медицинские организации',
                     onTap: () {
-                      // TODO: Add navigation or action
+                      Navigator.of(context).push(MaterialPageRoute(
+                          builder: (context) => ClinicChoose()));
                     },
                   ),
                   MenuCard(

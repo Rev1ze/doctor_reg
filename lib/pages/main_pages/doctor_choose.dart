@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:priem_poliklinika/func/func.dart';
 
-var grad = getGraduation();
+Future<List<Map<String, dynamic>>> grad = getGraduation();
 
 class DoctorChoose extends StatefulWidget {
   final bool is_choose;
@@ -32,26 +32,15 @@ class _DoctorChooseState extends State<DoctorChoose> {
             return const Center(child: Text('Доктора не найдены'));
           }
           final doctors = snapshot.data!;
-          return ListView.builder(
+          return ListView.separated(
             itemCount: doctors.length,
             itemBuilder: (context, index) {
               final doctor = doctors[index];
-              if (!widget.is_choose) {
-                return Column(
-                  children: [
-                    Row(
-                      children: [Image.network(doctor['image_path'])],
-                    )
-                  ],
-                );
-              }
               return ListTile(
-                minTileHeight: MediaQuery.of(context).size.height * 0.15,
-                
                 leading: Image.network(
                   doctor['image_path'],
-                  height: 250,
-                  width: 100,
+                  height: 100,
+                  width: 70,
                   fit: BoxFit.fill,
                 ),
                 title: Text(doctor['name'] +
@@ -60,17 +49,19 @@ class _DoctorChooseState extends State<DoctorChoose> {
                         " " +
                         doctor['surname'] ??
                     'Без имени'),
-                subtitle: FutureBuilder(
-                  future: getGraduation(),
-                  builder: (context, snapshot1) {
-                    if (snapshot1.connectionState == ConnectionState.waiting) {
-                      return const Text('Загрузка...');
-                    } else if (snapshot1.hasError) {
-                      return Text('Ошибка: ${snapshot1.error}');
-                    } else if (!snapshot1.hasData || snapshot1.data == null) {
-                      return const Text('Нет данных');
+                // Получаем специализации с помощью FutureBuilder для каждого элемента
+                subtitle: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: grad,
+                  builder: (context, gradSnapshot) {
+                    if (gradSnapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Text('Загрузка специализаций...');
+                    } else if (gradSnapshot.hasError) {
+                      return Text('Ошибка загрузки специализаций');
+                    } else if (!gradSnapshot.hasData) {
+                      return const Text('Без специализации');
                     }
-                    var gradList = snapshot1.data!
+                    var gradList = gradSnapshot.data!
                         .where(
                             (element) => element['doctor_id'] == doctor['id'])
                         .toList();
@@ -90,11 +81,16 @@ class _DoctorChooseState extends State<DoctorChoose> {
                 ),
                 onTap: () {
                   if (widget.is_choose == false) {
+                    
                     return;
                   }
                 },
               );
             },
+            separatorBuilder: (context, index) => const Divider(
+              color: Colors.black,
+              height: 1,
+            ),
           );
         },
       ),

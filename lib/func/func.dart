@@ -47,3 +47,8 @@ Future<PostgrestList> getGraduation() async {
       await Supabase.instance.client.from('doctor_graduation').select('*');
   return aboutUser;
 }
+Future<PostgrestList> getClinic() async {
+  final aboutUser =
+      await Supabase.instance.client.from('clinic').select('*');
+  return aboutUser;
+}

@@ -24,6 +24,7 @@ class _LoginInState extends State<LoginIn> {
       appBar: AppBar(
         title: const Text('Вход'),
         centerTitle: true,
+        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
