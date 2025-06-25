@@ -246,18 +246,22 @@ class _RegPageState extends State<RegPage> {
                       'created_at': DateTime.now().toIso8601String(),
                       'birthday': birthDateInString
                     });
-                    if (response.error != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              'Ошибка регистрации: ${response.error!.message}'),
-                        ),
-                      );
-                    }
-                  } catch (e) {
+                    final userId = maxId + 1;
+                    await Supabase.instance.client.from('about_user').insert({
+                      'id': userId,
+                      'oms': '',
+                      'dms': '',
+                      'group_blood': null,
+                      'passport_series': null,
+                      'pasport_number': null,
+                      'adress': '',
+                    });
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Ошибка: $e')),
+                      const SnackBar(
+                          content: Text('Вы успешно зарегестрировались')),
                     );
+                  } catch (e) {
+                    log('$e');
                     return;
                   }
                 },

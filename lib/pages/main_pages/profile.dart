@@ -7,452 +7,464 @@ import 'package:priem_poliklinika/func/func.dart';
 import 'package:priem_poliklinika/func/supabase_connect.dart';
 import 'package:priem_poliklinika/main.dart';
 import 'package:priem_poliklinika/pages/board_page/onboarding_page.dart';
-import 'package:priem_poliklinika/pages/main_pages/choose_menu.dart';
 import 'package:priem_poliklinika/pages/main_pages/navbar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-dynamic profileFile;
-bool isChanged = false;
-
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  late TextEditingController nameController;
+  late TextEditingController surnameController;
+  late TextEditingController patronymicController;
+
+  late TextEditingController omsController;
+  late TextEditingController dmsController;
+  late TextEditingController passportSeriesController;
+  late TextEditingController passportNumberController;
+  late TextEditingController addressController;
+
+  final bloodTypes = ['A(I)', 'B(II)', 'AB(III)', 'O(IV)'];
+  final rhFactors = ['Положительная', 'Отрицательная'];
+
+  String? selectedBloodType;
+  String? selectedRhFactor;
+
+  bool isLoading = true;
+  String? profileImageUrl;
+  File? localProfileFile;
+
+  final _formKey = GlobalKey<FormState>();
+
+  bool isOmsLocked = false;
+  bool isDmsLocked = false;
+  bool isNameLocked = false;
+  bool isPassportLocked = false;
+  bool isBloodGroupLocked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    nameController = TextEditingController();
+    surnameController = TextEditingController();
+    patronymicController = TextEditingController();
+    omsController = TextEditingController();
+    dmsController = TextEditingController();
+    passportSeriesController = TextEditingController();
+    passportNumberController = TextEditingController();
+    addressController = TextEditingController();
+    if (localProfileFile1 != null) {
+      localProfileFile = localProfileFile1;
+    }
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final user = await getCurrentUser();
+      final aboutUser = await getAboutUser();
+      final url = await get_profile_page_path();
+
+      if (!mounted) return;
+
+      final groupBloodId = aboutUser['group_blood'];
+      String? bloodType;
+      String? rhFactor;
+
+      if (groupBloodId != null) {
+        final bloodEntry = _bloodTypeRhMapping.firstWhere(
+          (e) => e['id'] == groupBloodId,
+          orElse: () => {},
+        );
+        if (bloodEntry.isNotEmpty) {
+          bloodType = bloodEntry['type_blood'];
+          rhFactor = bloodEntry['neg_or_pos'];
+        }
+      }
+
+      setState(() {
+        nameController.text = user['name'] ?? '';
+        surnameController.text = user['surname'] ?? '';
+        patronymicController.text = user['patronymic'] ?? '';
+
+        omsController.text = aboutUser['oms'] ?? '';
+        dmsController.text = aboutUser['dms'] ?? '';
+        passportSeriesController.text =
+            aboutUser['passport_series']?.toString() ?? '';
+        passportNumberController.text =
+            aboutUser['pasport_number']?.toString() ?? '';
+        addressController.text = aboutUser['adress'] ?? '';
+
+        profileImageUrl = url;
+
+        selectedBloodType = bloodType;
+        selectedRhFactor = rhFactor;
+
+        // Флаги блокировки
+        isNameLocked = nameController.text.isNotEmpty ||
+            surnameController.text.isNotEmpty ||
+            patronymicController.text.isNotEmpty;
+        isOmsLocked = omsController.text.isNotEmpty;
+        isDmsLocked = dmsController.text.isNotEmpty;
+        isPassportLocked = passportSeriesController.text.isNotEmpty ||
+            passportNumberController.text.isNotEmpty;
+        isBloodGroupLocked =
+            selectedBloodType != null && selectedRhFactor != null;
+
+        isLoading = false;
+      });
+    } catch (e, st) {
+      log('Error loading user data: $e\n$st');
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ошибка загрузки данных')),
+      );
+    }
+  }
+
+  final List<Map<String, dynamic>> _bloodTypeRhMapping = [
+    {'id': 1, 'type_blood': 'A(I)', 'neg_or_pos': 'Отрицательная'},
+    {'id': 2, 'type_blood': 'A(I)', 'neg_or_pos': 'Положительная'},
+    {'id': 3, 'type_blood': 'B(II)', 'neg_or_pos': 'Отрицательная'},
+    {'id': 4, 'type_blood': 'B(II)', 'neg_or_pos': 'Положительная'},
+    {'id': 5, 'type_blood': 'AB(III)', 'neg_or_pos': 'Положительная'},
+    {'id': 6, 'type_blood': 'AB(III)', 'neg_or_pos': 'Отрицательная'},
+    {'id': 7, 'type_blood': 'O(IV)', 'neg_or_pos': 'Положительная'},
+    {'id': 8, 'type_blood': 'O(IV)', 'neg_or_pos': 'Отрицательная'},
+  ];
+
+  // Валидация
+  String? _validateOms(String? value) {
+    if (value == null || value.isEmpty) return 'Введите номер ОМС';
+    if (!RegExp(r'^\d{16}$').hasMatch(value))
+      return 'ОМС должен содержать 16 цифр';
+    return null;
+  }
+
+  String? _validateDms(String? value) {
+    if (value != null &&
+        value.isNotEmpty &&
+        !RegExp(r'^\d{6,16}$').hasMatch(value)) {
+      return 'ДМС должен содержать от 6 до 16 цифр';
+    }
+    return null;
+  }
+
+  String? _validatePassportSeries(String? value) {
+    if (value == null || value.isEmpty) return 'Введите серию паспорта';
+    if (!RegExp(r'^\d{4}$').hasMatch(value))
+      return 'Серия паспорта должна содержать 4 цифры';
+    return null;
+  }
+
+  String? _validatePassportNumber(String? value) {
+    if (value == null || value.isEmpty) return 'Введите номер паспорта';
+    if (!RegExp(r'^\d{6}$').hasMatch(value))
+      return 'Номер паспорта должен содержать 6 цифр';
+    return null;
+  }
+
+  String? _validateAddress(String? value) {
+    if (value == null || value.isEmpty) return 'Введите адрес';
+    return null;
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      final nowUser = await getCurrentUser();
+      final userId = nowUser['id'].toString();
+      final storage = Supabase.instance.client.storage;
+      final filePath = 'profiles/$userId.png';
+
+      await storage.from('images').upload(filePath, File(pickedFile.path),
+          fileOptions: FileOptions(upsert: true));
+      final publicUrl = await storage.from('images').getPublicUrl(filePath);
+
+      if (!mounted) return;
+      setState(() {
+        isChanged = true;
+        localProfileFile1 = File(pickedFile.path);
+        localProfileFile = File(pickedFile.path);
+        profileImageUrl =
+            '${publicUrl.toString()}?t=${DateTime.now().millisecondsSinceEpoch}';
+      });
+      log('Uploaded profile image URL: $publicUrl');
+    }
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    surnameController.dispose();
+    patronymicController.dispose();
+    omsController.dispose();
+    dmsController.dispose();
+    passportSeriesController.dispose();
+    passportNumberController.dispose();
+    addressController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        actions: [
-          IconButton(
-              onPressed: () {
-                Supabase.instance.client.auth.signOut();
-                Navigator.of(context).push(MaterialPageRoute(
-                    builder: (context) => const OnboardingPage()));
-              },
-              icon: Icon(Icons.logout_rounded))
-        ],
         title: const Text('Ваша учетная запись'),
         centerTitle: true,
         backgroundColor: Colors.blue,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () {
+              Supabase.instance.client.auth.signOut();
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const OnboardingPage()),
+              );
+            },
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        scrollDirection: Axis.vertical,
-        physics: BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            Center(
-              child: GestureDetector(
-                onTap: () async {
-                  final pickedFile = await ImagePicker()
-                      .pickImage(source: ImageSource.gallery);
-                  if (pickedFile != null) {
-                    final nowUser = await getCurrentUser();
-                    final userId = nowUser['id'].toString();
-                    final userUuid = nowUser['uuid'].toString();
-                    final storage = Supabase.instance.client.storage;
-                    final filePath = 'profiles/$userId.png';
-                    await storage
-                        .from('images')
-                        .upload(filePath, File(pickedFile.path),
-                            fileOptions: FileOptions(
-                              upsert: true,
-                            ));
-                    log('Image uploaded successfully');
-                    await storage.from('images').remove([filePath]);
-                    await storage
-                        .from('images')
-                        .upload(filePath, File(pickedFile.path),
-                            fileOptions: FileOptions(
-                              upsert: true,
-                            ));
-                    log('Image uploaded successfully');
-                    final publicUrl =
-                        await storage.from('images').getPublicUrl(filePath);
-                    await supabase
-                        .from('user')
-                        .update({'profile_page_path': publicUrl.toString()}).eq(
-                            'uuid', userUuid);
-                    setState(() {
-                      isChanged = true;
-                      localProfileFile = File(pickedFile.path);
-                    });
-                  }
-                },
-                child: localProfileFile != null
-                    ? Container(
-                        height: 150,
-                        width: 150,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.blue, width: 2),
-                          borderRadius: BorderRadius.circular(150),
-                          image: DecorationImage(
-                            image: FileImage(localProfileFile!),
-                            fit: BoxFit.cover,
-                          ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: CircleAvatar(
+                          radius: 75,
+                          backgroundColor: Colors.blue,
+                          backgroundImage: localProfileFile != null
+                              ? FileImage(localProfileFile!)
+                              : (profileImageUrl != null
+                                  ? NetworkImage(profileImageUrl!)
+                                  : null) as ImageProvider<Object>?,
+                          child: (localProfileFile == null &&
+                                  profileImageUrl == null)
+                              ? const Icon(Icons.person,
+                                  size: 75, color: Colors.white54)
+                              : null,
                         ),
-                      )
-                    : FutureBuilder<String>(
-                        future: get_profile_page_path(),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return CircularProgressIndicator();
-                          } else if (snapshot.hasError || !snapshot.hasData) {
-                            return Icon(Icons.error);
-                          } else {
-                            return Container(
-                              height: 150,
-                              width: 150,
-                              decoration: BoxDecoration(
-                                border:
-                                    Border.all(color: Colors.blue, width: 2),
-                                borderRadius: BorderRadius.circular(150),
-                                image: DecorationImage(
-                                  image: NetworkImage(snapshot.data!),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            );
-                          }
-                        },
                       ),
-              ),
-            ),
-            const SizedBox(
-              height: 20,
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: FutureBuilder<Map<String, dynamic>>(
-                future: getCurrentUser(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  } else if (snapshot.hasError || !snapshot.hasData) {
-                    return const Center(child: Text('Ошибка загрузки данных'));
-                  } else {
-                    final user = snapshot.data!;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildSectionTitle('🧑 Личные данные'),
+                    _buildTextField(
+                        controller: nameController,
+                        label: 'Имя',
+                        enabled: !isNameLocked),
+                    _buildTextField(
+                        controller: surnameController,
+                        label: 'Фамилия',
+                        enabled: !isNameLocked),
+                    _buildTextField(
+                        controller: patronymicController,
+                        label: 'Отчество',
+                        enabled: !isNameLocked),
+                    _buildSectionTitle('📄 Паспорт'),
+                    Row(
                       children: [
-                        TextField(
-                          controller:
-                              TextEditingController(text: user['name'] ?? ''),
-                          decoration: const InputDecoration(
-                            labelText: 'Имя',
-                            border: OutlineInputBorder(),
-                          ),
+                        Expanded(
+                          child: _buildTextField(
+                              controller: passportSeriesController,
+                              label: 'Серия',
+                              keyboardType: TextInputType.number,
+                              validator: _validatePassportSeries,
+                              enabled: !isPassportLocked),
                         ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: TextEditingController(
-                              text: user['surname'] ?? ''),
-                          decoration: const InputDecoration(
-                            labelText: 'Фамилия',
-                            border: OutlineInputBorder(),
-                          ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildTextField(
+                              controller: passportNumberController,
+                              label: 'Номер',
+                              keyboardType: TextInputType.number,
+                              validator: _validatePassportNumber,
+                              enabled: !isPassportLocked),
                         ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: TextEditingController(
-                              text: user['patronumic'] ?? ''),
-                          decoration: const InputDecoration(
-                            labelText: 'Отчество',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
                       ],
-                    );
-                  }
-                },
+                    ),
+                    _buildSectionTitle('💳 Полисы'),
+                    _buildTextField(
+                        controller: omsController,
+                        label: 'ОМС',
+                        keyboardType: TextInputType.number,
+                        validator: _validateOms,
+                        enabled: !isOmsLocked),
+                    _buildTextField(
+                        controller: dmsController,
+                        label: 'ДМС (если есть)',
+                        keyboardType: TextInputType.number,
+                        validator: _validateDms,
+                        enabled: !isDmsLocked),
+                    _buildSectionTitle('💉 Группа крови'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedBloodType,
+                            decoration: InputDecoration(
+                              labelText: 'Группа',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              filled: true,
+                              fillColor: Colors.grey[100],
+                            ),
+                            items: bloodTypes
+                                .map((type) => DropdownMenuItem(
+                                    value: type, child: Text(type)))
+                                .toList(),
+                            onChanged: isBloodGroupLocked
+                                ? null
+                                : (val) =>
+                                    setState(() => selectedBloodType = val),
+                            validator: (val) =>
+                                val == null ? 'Выберите группу крови' : null,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedRhFactor,
+                            decoration: InputDecoration(
+                              labelText: 'Резус',
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              filled: true,
+                              fillColor: Colors.grey[100],
+                            ),
+                            items: rhFactors
+                                .map((factor) => DropdownMenuItem(
+                                    value: factor, child: Text(factor)))
+                                .toList(),
+                            onChanged: isBloodGroupLocked
+                                ? null
+                                : (val) =>
+                                    setState(() => selectedRhFactor = val),
+                            validator: (val) =>
+                                val == null ? 'Выберите резус-фактор' : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    _buildSectionTitle('🏠 Адрес проживания'),
+                    _buildTextField(
+                        controller: addressController,
+                        label: 'Адрес',
+                        validator: _validateAddress),
+                    const SizedBox(height: 30),
+                    ElevatedButton(
+                      onPressed: _saveProfile,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text('Сохранить',
+                          style: TextStyle(fontSize: 18)),
+                    ),
+                  ],
+                ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.all(8),
-              child: FutureBuilder(
-                  future: getAboutUser(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    } else {
-                      // Если данных нет, создаём пустую структуру для заполнения
-                      final aboutUser = snapshot.data ?? {};
+    );
+  }
 
-                      final bloodTypes = ['A(I)', 'B(II)', 'AB(III)', 'O(IV)'];
-                      final rhFactors = ['Положительная', 'Отрицательная'];
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24, bottom: 12),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
 
-                      final bloodTypeController = TextEditingController(
-                          text: aboutUser['blood_type'] ?? '');
-                      final rhFactorController = TextEditingController(
-                          text: aboutUser['rh_factor'] ?? '');
-                      final omsController =
-                          TextEditingController(text: aboutUser['oms'] ?? '');
-                      final dmsController =
-                          TextEditingController(text: aboutUser['dms'] ?? '');
-                      final passportSeriesController = TextEditingController(
-                          text: aboutUser['passport_series'].toString() ?? '');
-                      final passportNumberController = TextEditingController(
-                          text: aboutUser['pasport_number'].toString() ?? '');
-                      final addressController = TextEditingController(
-                          text: aboutUser['adress'] ?? '');
-
-                      String? validateOms(String? value) {
-                        if (value == null || value.isEmpty)
-                          return 'Введите номер ОМС';
-                        if (!RegExp(r'^\d{16}$').hasMatch(value))
-                          return 'ОМС должен содержать 16 цифр';
-                        return null;
-                      }
-
-                      String? validateDms(String? value) {
-                        if (value != null &&
-                            value.isNotEmpty &&
-                            !RegExp(r'^\d{6,16}$').hasMatch(value)) {
-                          return 'ДМС должен содержать от 6 до 16 цифр';
-                        }
-                        return null;
-                      }
-
-                      String? validatePassportSeries(String? value) {
-                        if (value == null || value.isEmpty)
-                          return 'Введите серию паспорта';
-                        if (!RegExp(r'^\d{4}$').hasMatch(value))
-                          return 'Серия паспорта должна содержать 4 цифры';
-                        return null;
-                      }
-
-                      String? validatePassportNumber(String? value) {
-                        if (value == null || value.isEmpty)
-                          return 'Введите номер паспорта';
-                        if (!RegExp(r'^\d{6}$').hasMatch(value))
-                          return 'Номер паспорта должен содержать 6 цифр';
-                        return null;
-                      }
-
-                      String? validateAddress(String? value) {
-                        if (value == null || value.isEmpty)
-                          return 'Введите адрес';
-                        return null;
-                      }
-
-                      // Для новых пользователей значения будут пустыми
-                      String? selectedBloodType =
-                          bloodTypes.contains(aboutUser['blood_type'])
-                              ? aboutUser['blood_type']
-                              : null;
-                      String? selectedRhFactor =
-                          rhFactors.contains(aboutUser['rh_factor'])
-                              ? aboutUser['rh_factor']
-                              : null;
-
-                      return Form(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            DropdownButtonFormField<String>(
-                              value: selectedBloodType,
-                              items: bloodTypes
-                                  .map((type) => DropdownMenuItem(
-                                      value: type, child: Text(type)))
-                                  .toList(),
-                              onChanged: (val) {
-                                selectedBloodType = val;
-                                bloodTypeController.text = val ?? '';
-                              },
-                              decoration: const InputDecoration(
-                                labelText: 'Группа крови',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              value: selectedRhFactor,
-                              items: rhFactors
-                                  .map((factor) => DropdownMenuItem(
-                                      value: factor, child: Text(factor)))
-                                  .toList(),
-                              onChanged: (val) {
-                                selectedRhFactor = val;
-                                rhFactorController.text = val ?? '';
-                              },
-                              decoration: const InputDecoration(
-                                labelText: 'Резус-фактор',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: omsController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'ОМС',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: validateOms,
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: dmsController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'ДМС (если есть)',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: validateDms,
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: passportSeriesController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Серия паспорта',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: validatePassportSeries,
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: passportNumberController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Номер паспорта',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: validatePassportNumber,
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: addressController,
-                              decoration: const InputDecoration(
-                                labelText: 'Адрес',
-                                border: OutlineInputBorder(),
-                              ),
-                              validator: validateAddress,
-                            ),
-                            const SizedBox(height: 24),
-                            Center(
-                              child: ElevatedButton(
-                                onPressed: () async {
-                                  // Simple validation
-                                  if (validateOms(omsController.text) != null ||
-                                      validateDms(dmsController.text) != null ||
-                                      validatePassportSeries(
-                                              passportSeriesController.text) !=
-                                          null ||
-                                      validatePassportNumber(
-                                              passportNumberController.text) !=
-                                          null ||
-                                      validateAddress(addressController.text) !=
-                                          null ||
-                                      (selectedBloodType == null ||
-                                          selectedRhFactor == null)) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text(
-                                              'Проверьте правильность заполнения полей')),
-                                    );
-                                    return;
-                                  }
-
-                                  // Mapping for blood type and rh factor to ID
-                                  final bloodTypeRhMapping = [
-                                    {
-                                      'id': 1,
-                                      'type_blood': 'A(I)',
-                                      'neg_or_pos': 'Отрицательная'
-                                    },
-                                    {
-                                      'id': 2,
-                                      'type_blood': 'A(I)',
-                                      'neg_or_pos': 'Положительная'
-                                    },
-                                    {
-                                      'id': 3,
-                                      'type_blood': 'B(II)',
-                                      'neg_or_pos': 'Отрицательная'
-                                    },
-                                    {
-                                      'id': 4,
-                                      'type_blood': 'B(II)',
-                                      'neg_or_pos': 'Положительная'
-                                    },
-                                    {
-                                      'id': 5,
-                                      'type_blood': 'AB(III)',
-                                      'neg_or_pos': 'Положительная'
-                                    },
-                                    {
-                                      'id': 6,
-                                      'type_blood': 'AB(III)',
-                                      'neg_or_pos': 'Отрицательная'
-                                    },
-                                    {
-                                      'id': 7,
-                                      'type_blood': 'O(IV)',
-                                      'neg_or_pos': 'Положительная'
-                                    },
-                                    {
-                                      'id': 8,
-                                      'type_blood': 'O(IV)',
-                                      'neg_or_pos': 'Отрицательная'
-                                    },
-                                  ];
-
-                                  final bloodTypeId =
-                                      bloodTypeRhMapping.firstWhere(
-                                    (item) =>
-                                        item['type_blood'] ==
-                                            selectedBloodType &&
-                                        item['neg_or_pos'] == selectedRhFactor,
-                                    orElse: () => {'id': -1},
-                                  )['id'];
-
-                                  if (bloodTypeId == -1) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text(
-                                              'Выберите корректную группу крови и резус-фактор')),
-                                    );
-                                    return;
-                                  }
-                                  final nowUser = await getCurrentUser();
-                                  final userUuid = nowUser['id'].toString();
-
-                                  await supabase.from('about_user').upsert({
-                                    'id': userUuid,
-                                    'group_blood': bloodTypeId,
-                                    'oms': omsController.text,
-                                    'dms': dmsController.text,
-                                    'passport_series': int.parse(
-                                        passportSeriesController.text),
-                                    'pasport_number': int.parse(
-                                        passportNumberController.text),
-                                    'adress': addressController.text,
-                                  });
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content:
-                                            Text('Данные успешно сохранены')),
-                                  );
-                                },
-                                child: const Text('Сохранить'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                  }),
-            )
-          ],
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+    bool enabled = true,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        validator: validator,
+        enabled: enabled,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          filled: true,
+          fillColor: enabled ? Colors.grey[100] : Colors.grey[300],
         ),
       ),
     );
+  }
+
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пожалуйста, исправьте ошибки в форме')),
+      );
+      return;
+    }
+    if (selectedBloodType == null || selectedRhFactor == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Пожалуйста, выберите группу крови и резус')),
+      );
+      return;
+    }
+
+    try {
+      final nowUser = await getCurrentUser();
+      final userId = nowUser['id'].toString();  
+      final selectedBloodId = _bloodTypeRhMapping.firstWhere((e) =>
+          e['type_blood'] == selectedBloodType &&
+          e['neg_or_pos'] == selectedRhFactor)['id'];
+
+      await supabase.from('about_user').upsert({
+        'id': userId,
+        'oms': omsController.text,
+        'dms': dmsController.text,
+        'passport_series': passportSeriesController.text,
+        'pasport_number': passportNumberController.text,
+        'adress': addressController.text,
+        'group_blood': selectedBloodId,
+      });
+
+      await supabase.from('user').update({
+        'name': nameController.text,
+        'surname': surnameController.text,
+        'patronumic': patronymicController.text,
+      }).eq('id', userId);
+
+      if (!mounted) {
+        setState(() {
+          build(context);
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Данные успешно сохранены')),
+      );
+    } catch (e, st) {
+      log('Error saving profile: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ошибка при сохранении данных')),
+      );
+    }
   }
 }

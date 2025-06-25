@@ -59,7 +59,7 @@ class OnboardingPageonBoardingPageState extends State<OnboardingPage> {
                 onPressed: () {
                   if (currentPage == 2) {
                     Navigator.of(context).push(MaterialPageRoute(
-                        builder: (context) => const LoginIn()));
+                        builder: (context) => const UnifiedLoginPage()));
                   } else {
                     pageController.nextPage(
                       duration: const Duration(milliseconds: 300),

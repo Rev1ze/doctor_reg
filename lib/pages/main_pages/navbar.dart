@@ -5,7 +5,7 @@ import 'package:priem_poliklinika/pages/main_pages/choose_menu.dart';
 import 'package:priem_poliklinika/pages/main_pages/profile.dart';
 
 bool isChanged = false;
-dynamic localProfileFile;
+dynamic localProfileFile1;
 
 class MainBottomNavBar extends StatefulWidget {
   const MainBottomNavBar({super.key});
@@ -17,16 +17,16 @@ class MainBottomNavBar extends StatefulWidget {
 class _MainBottomNavBarState extends State<MainBottomNavBar> {
   int _selectedIndex = 0;
 
-  Widget _buildProfileAvatar() {
+  Widget  _buildProfileAvatar() {
     if (!isChanged) {
       return FutureBuilder(
         future: get_profile_page_path(),
         builder: (context, snapshot) {
-          if (localProfileFile != null) {
+          if (localProfileFile1 != null) {
             return CircleAvatar(
                 radius: 20,
                 backgroundImage: FileImage(
-                  localProfileFile,
+                  localProfileFile1,
                 ));
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -47,7 +47,7 @@ class _MainBottomNavBarState extends State<MainBottomNavBar> {
     } else {
       return CircleAvatar(
         radius: 20,
-        backgroundImage: FileImage(localProfileFile),
+        backgroundImage: FileImage(localProfileFile1),
       );
     }
   }
@@ -62,13 +62,7 @@ class _MainBottomNavBarState extends State<MainBottomNavBar> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: [
-        MainMenu(),
-        Center(
-          child: Text('data'),
-        ),
-        ProfilePage()
-      ][_selectedIndex],
+      body: [MainMenu(), ProfilePage()][_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -76,10 +70,6 @@ class _MainBottomNavBarState extends State<MainBottomNavBar> {
           const BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Главная',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.list),
-            label: 'Другое',
           ),
           BottomNavigationBarItem(
             icon: _buildProfileAvatar(),
